@@ -155,16 +155,12 @@ const getSPARenderer = lazyCachedFunction(async () => {
   }
 })
 
-const payloadCache = useStorage('internal:nuxt:prerender:payload')
-const islandCache = useStorage('internal:nuxt:prerender:island')
-const islandPropCache = useStorage('internal:nuxt:prerender:island-props')
-
 async function getIslandContext (event: H3Event): Promise<NuxtIslandContext> {
   // TODO: Strict validation for url
   let url = event.node.req.url || ''
-  if (process.env.prerender && event.node.req.url && await islandPropCache.hasItem(event.node.req.url)) {
+  if (process.env.prerender && event.node.req.url && await useStorage('internal:nitro:prerender:island-props').hasItem(event.node.req.url)) {
     // rehydrate props from cache so we can rerender island if cache does not have it any more
-    url = await islandPropCache.getItem(event.node.req.url) as string
+    url = await useStorage('internal:nitro:prerender:island-props').getItem(event.node.req.url) as string
   }
   url = url.substring('/__nuxt_island'.length + 1) || ''
   const [componentName, hashId] = url.split('?')[0].split('_')
@@ -213,8 +209,8 @@ export default defineRenderHandler(async (event): Promise<Partial<RenderResponse
     ? await getIslandContext(event)
     : undefined
 
-  if (process.env.prerender && islandContext && event.node.req.url && await islandCache.hasItem(event.node.req.url)) {
-    return islandCache.getItem(event.node.req.url) as Promise<Partial<RenderResponse>>
+  if (process.env.prerender && islandContext && event.node.req.url && await useStorage('internal:nitro:prerender:island').hasItem(event.node.req.url)) {
+    return useStorage('internal:nitro:prerender:island').getItem(event.node.req.url) as Promise<Partial<RenderResponse>>
   }
 
   // Request url
@@ -225,8 +221,8 @@ export default defineRenderHandler(async (event): Promise<Partial<RenderResponse
   if (isRenderingPayload) {
     url = url.substring(0, url.lastIndexOf('/')) || '/'
     event.node.req.url = url
-    if (process.env.prerender && await payloadCache.hasItem(url)) {
-      return payloadCache.getItem(url) as Promise<Partial<RenderResponse>>
+    if (process.env.prerender && await useStorage('internal:nitro:prerender:payload').hasItem(url)) {
+      return useStorage('internal:nitro:prerender:payload').getItem(url) as Promise<Partial<RenderResponse>>
     }
   }
 
@@ -292,7 +288,7 @@ export default defineRenderHandler(async (event): Promise<Partial<RenderResponse
   if (isRenderingPayload) {
     const response = renderPayloadResponse(ssrContext)
     if (process.env.prerender) {
-      await payloadCache.setItem(url, response)
+      await useStorage('internal:nitro:prerender:payload').setItem(url, response)
     }
     return response
   }
@@ -301,7 +297,7 @@ export default defineRenderHandler(async (event): Promise<Partial<RenderResponse
     // Hint nitro to prerender payload for this route
     appendResponseHeader(event, 'x-nitro-prerender', joinURL(url, process.env.NUXT_JSON_PAYLOADS ? '_payload.json' : '_payload.js'))
     // Use same ssr context to generate payload for this route
-    await payloadCache.setItem(withoutTrailingSlash(url), renderPayloadResponse(ssrContext))
+    await useStorage('internal:nitro:prerender:payload').setItem(withoutTrailingSlash(url), renderPayloadResponse(ssrContext))
   }
 
   if (process.env.NUXT_INLINE_STYLES && !islandContext) {
@@ -429,8 +425,8 @@ export default defineRenderHandler(async (event): Promise<Partial<RenderResponse
       }
     } satisfies RenderResponse
     if (process.env.prerender) {
-      await islandCache.setItem(`/__nuxt_island/${islandContext!.name}_${islandContext!.id}`, response)
-      await islandPropCache.setItem(`/__nuxt_island/${islandContext!.name}_${islandContext!.id}`, event.node.req.url!)
+      await useStorage('internal:nitro:prerender:island').setItem(`/__nuxt_island/${islandContext!.name}_${islandContext!.id}`, response)
+      await useStorage('internal:nitro:prerender:island-props').setItem(`/__nuxt_island/${islandContext!.name}_${islandContext!.id}`, event.node.req.url!)
     }
     return response
   }
